@@ -1,7 +1,7 @@
 ### imports ###
-import praw
 from PIL import Image
 import requests
+import json
 from reddit_parse import mlplt_bargraph as bgraph
 ###############
 
@@ -47,12 +47,11 @@ def img_from_link(url):
 ### workers/main functions ###
 
 
-def post_worker(submission, instance, ibase: list, name):
-    """Given a submission ID and Reddit
-    instance, formats a Reddit post into
+def post_worker(post, ibase: list, name):
+    """Given pushshift reddit post data,
+    formats the post into
     the image template and saves it.
-    Argument submission: The submission ID
-    Argument instance: The PRAW Reddit instance
+    Argument post: The pushshift JSON post data.
     Argument ibase: An array with the PIL image base as the
                     first argument, and a 4-tuple containing
                     the box to paste the extracted image
@@ -60,8 +59,7 @@ def post_worker(submission, instance, ibase: list, name):
     Argument name: The name of the image to be saved."""
 
     base, pos = ibase[0], ibase[1]
-    subm = instance.submission(id=submission)
-    img = img_from_link(subm.url)
+    img = img_from_link(post['url'])
     if img is not None:
         if img.size[0] > 1214 or img.size[1] > 638:
             img = img.resize((1213, 637))
@@ -71,7 +69,6 @@ def post_worker(submission, instance, ibase: list, name):
                      int(round((blank.size[1]-img.size[1])/2))))
         base.paste(blank, pos)
         base.save("out\\%s" % name)
-
 
 
 
