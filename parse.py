@@ -8,8 +8,6 @@ from reddit_parse import mlplt_bargraph as bgraph
 
 ### functions/libs ###
 
-
-
 def record(text: str):
     with open("logs\\datalog.txt", "a") as f:
         f.write("\n" + text)
@@ -19,6 +17,15 @@ def log(text: str):
     with open("logs\\log.txt", "a") as f:
         f.write("\n" + text)
 
+
+def pushshift_get(num, sub, time):
+    # slightly based on https://gist.github.com/dylankilkenny/3dbf6123527260165f8c5c3bc3ee331b, so thanks
+    response = requests.get("https://api.pushshift.io/reddit/search/submission?"
+                            "&size=%s"
+                            "&after=%s"
+                            "&subreddit=%s"
+                            % (num, time, sub))
+    return json.loads(response.text)['data']
 
 def get_providers():
     with open("trusted_providers.txt", 'r')as f:
