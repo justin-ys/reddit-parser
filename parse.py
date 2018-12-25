@@ -47,7 +47,7 @@ def img_from_link(url):
 ### workers/main functions ###
 
 
-def post_worker(submission, instance, ibase: list):
+def post_worker(submission, instance, ibase: list, name):
     """Given a submission ID and Reddit
     instance, formats a Reddit post into
     the image template and saves it.
@@ -56,7 +56,8 @@ def post_worker(submission, instance, ibase: list):
     Argument ibase: An array with the PIL image base as the
                     first argument, and a 4-tuple containing
                     the box to paste the extracted image
-                    as the second argument"""
+                    as the second argument
+    Argument name: The name of the image to be saved."""
 
     base, pos = ibase[0], ibase[1]
     subm = instance.submission(id=submission)
@@ -69,7 +70,7 @@ def post_worker(submission, instance, ibase: list):
                     (int(round((blank.size[0]-img.size[0])/2)),
                      int(round((blank.size[1]-img.size[1])/2))))
         base.paste(blank, pos)
-        return base
+        base.save("out\\%s" % name)
 
 
 
