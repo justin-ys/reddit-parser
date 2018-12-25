@@ -48,9 +48,9 @@ def graph_names(names: list, values: list) -> str:
     ticks = numpy.arange(len(values)) # even spacing!
 
     plt.barh(ticks,
-                    values,
-                    tick_label=names,
-                    height=0.5)  # probably shouldn't be hardcoded
+             values,
+             tick_label=names,
+             height=0.5)  # probably shouldn't be hardcoded
 
     return fig2img(plt.gcf())
 
