@@ -1,9 +1,11 @@
 ### imports ###
+from tqdm import tqdm
 from PIL import Image, ImageFont, ImageDraw
 import requests
 import numpy
 import json
 import time
+import datetime
 from reddit_parse import mlplt_bargraph as bgraph
 ###############
 
@@ -21,6 +23,7 @@ def pushshift_get(sub, stime, etime):
                             "&before=%s"
                             "&after=%s"
                             "&subreddit=%s"
+                            "&size=100000" # otherwise just returns 25
                             % (etime, stime, sub))
     return json.loads(response.text)['data']
 
@@ -99,6 +102,7 @@ def post_worker(post, ibase: list, name, graph):
         else:
             draw.text((scorepos, 832), "karma: " + str(post['score']), font=sfont, fill=(148,148,255,255))
 
+        draw.text((30,244), datetime.datetime.utcfromtimestamp(post['created_utc']).strftime("%B %d, %Y %H:%M:%S"),font=afont)
         base_new.paste(graph, (0,base.size[1] - graph.size[1]))
         log("Post %s at %s by /u/%s. Score: %s\n" % (post['permalink'], post['created_utc'], post['author'], post['score']), "logs\\record.txt")
         base_new.save("out\\%s" % name)
@@ -110,14 +114,32 @@ def subreddit_worker(sub, stime, etime, timg):
     Argument stime: The time to start in epoch time, as a string.
     Argument etime: The time to end in epoch time, as a string
     Argument timg: See ibase in post_worker"""
-    times = numpy.arange(stime, etime, 3600) # implement your gnown gnarange function CHUM
+    times = numpy.arange(stime, etime, 3600)
     leaderboard = {}
     leaderboard_old = 0
     graph = bgraph.graph_names([""] * 3, [0] * 3)
-    try:
-        count = 0
-        for i in range(0,len(times)):
-            data = pushshift_get(sub,times[i],times[i+1])
+    count = 0
+    for i in range(0,len(times)):
+        try:
+            print("Now processing: Block %d out of %d" % (i, len(times) - 1))
+            data = pushshift_get(sub, times[i], times[i + 1])
+            for post in tqdm(data):
+                    if post['author'] is not "[deleted]":
+                        try:
+                            leaderboard[post['author']] += post['score']
+                        except KeyError:
+                            leaderboard[post['author']] = post['score']
+
+                    leaderboard_top = sorted(leaderboard, key=leaderboard.get)[-3:]
+                    if leaderboard_top != leaderboard_old:
+                        graph = bgraph.graph_names(leaderboard_top, [leaderboard[x] for x in leaderboard_top],
+                                                       "Karma Leaderboard")
+                        leaderboard_old = leaderboard_top
+                    post_worker(post, timg, "parsed_%s.png" % str(count).zfill(6), graph)
+                    count += 1
+
+        except IndexError:
+            data = pushshift_get('me_irl', times[-1], int(time.time()))
             for post in data:
                 if post['author'] is not "[deleted]":
                     try:
@@ -127,14 +149,11 @@ def subreddit_worker(sub, stime, etime, timg):
 
                 leaderboard_top = sorted(leaderboard, key=leaderboard.get)[-3:]
                 if leaderboard_top != leaderboard_old:
-                    graph = bgraph.graph_names(leaderboard_top, [leaderboard[x] for x in leaderboard_top],"Karma Leaderboard")
+                    graph = bgraph.graph_names(leaderboard_top, [leaderboard[x] for x in leaderboard_top],
+                                               "Karma Leaderboard")
                     leaderboard_old = leaderboard_top
                 post_worker(post, timg, "parsed_%s.png" % str(count).zfill(6), graph)
                 count += 1
-    except IndexError:
-        data = pushshift_get(sub, times[-1], int(time.time()))
-        for post in data:
-            post_worker(post, timg, "parsed_%s.png" % str(count).zfill(6), graph)
 
 
 
@@ -143,4 +162,4 @@ def subreddit_worker(sub, stime, etime, timg):
 
 if __name__ == '__main__':
     template = [Image.open("reddit_parse\\resources\\template.png"),(35,258,1595,1080)]
-    subreddit_worker('me_irl', 1514764800, 1514779800, template)
+    subreddit_worker('me_irl',1514764800,1545819010, template)
