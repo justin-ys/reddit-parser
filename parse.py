@@ -51,7 +51,7 @@ def img_from_link(url):
 ### workers/main functions ###
 
 
-def post_worker(post, ibase: list, name):
+def post_worker(post, ibase: list, name, graph):
     """Given pushshift reddit post data,
     formats the post into
     the image template and saves it.
@@ -60,7 +60,8 @@ def post_worker(post, ibase: list, name):
                     first argument, and a 4-tuple containing
                     the box to paste the extracted image
                     as the second argument
-    Argument name: The name of the image to be saved."""
+    Argument name: The name of the image to be saved.
+    Argument graph: An image containing a bargraph for karma scores."""
     def get_text_centered(text, font, size, pos):
         fnt = ImageFont.truetype(font, size, encoding='unic')
         size = fnt.getsize(text)
@@ -74,7 +75,7 @@ def post_worker(post, ibase: list, name):
         target_y = pos[3] - pos[1]
         if img.size[0] > target_x or img.size[1] > target_y:
             img = img.resize((target_x, target_y))
-        blank = Image.new("RGB", (target_x, target_y)) # why does Pillow force us to create another Image for pasting????
+        blank = Image.new("RGB", (target_x, target_y)) # why does Pillow force us to create another Image for pasting???
         blank.paste(img,
                     (int(round((blank.size[0]-img.size[0])/2)),
                      int(round((blank.size[1]-img.size[1])/2))))
@@ -98,7 +99,8 @@ def post_worker(post, ibase: list, name):
         else:
             draw.text((scorepos, 832), "karma: " + str(post['score']), font=sfont, fill=(148,148,255,255))
 
-        log("Post %s at %s by /u/%s\n" % (post['permalink'], post['created_utc'], post['author']), "logs\\record.txt")
+        base_new.paste(graph, (0,base.size[1] - graph.size[1]))
+        log("Post %s at %s by /u/%s. Score: %s\n" % (post['permalink'], post['created_utc'], post['author'], post['score']), "logs\\record.txt")
         base_new.save("out\\%s" % name)
 
 def subreddit_worker(sub, stime, etime, timg):
@@ -109,17 +111,30 @@ def subreddit_worker(sub, stime, etime, timg):
     Argument etime: The time to end in epoch time, as a string
     Argument timg: See ibase in post_worker"""
     times = numpy.arange(stime, etime, 3600) # implement your gnown gnarange function CHUM
+    leaderboard = {}
+    leaderboard_old = 0
+    graph = bgraph.graph_names([""] * 3, [0] * 3)
     try:
         count = 0
         for i in range(0,len(times)):
             data = pushshift_get(sub,times[i],times[i+1])
             for post in data:
-                post_worker(post, timg, "parsed_%s.png" % str(count).zfill(6))
+                if post['author'] is not "[deleted]":
+                    try:
+                        leaderboard[post['author']] += post['score']
+                    except KeyError:
+                        leaderboard[post['author']] = post['score']
+
+                leaderboard_top = sorted(leaderboard, key=leaderboard.get)[-3:]
+                if leaderboard_top != leaderboard_old:
+                    graph = bgraph.graph_names(leaderboard_top, [leaderboard[x] for x in leaderboard_top],"Karma Leaderboard")
+                    leaderboard_old = leaderboard_top
+                post_worker(post, timg, "parsed_%s.png" % str(count).zfill(6), graph)
                 count += 1
     except IndexError:
-        data = pushshift_get(sub, times[i], int(time.time()))
+        data = pushshift_get(sub, times[-1], int(time.time()))
         for post in data:
-            post_worker(post, timg, "parsed_%s.png" % str(count).zfill(6))
+            post_worker(post, timg, "parsed_%s.png" % str(count).zfill(6), graph)
 
 
 

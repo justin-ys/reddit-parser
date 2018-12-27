@@ -1,7 +1,9 @@
 import numpy
+import matplotlib
 import matplotlib.pyplot as plt
 from PIL import Image
 
+matplotlib.rcParams.update({'font.size': 22})
 #from: http://www.icare.univ-lille1.fr/tutorials/convert_a_matplotlib_figure
 def fig2data(fig):
     """
@@ -35,13 +37,14 @@ def fig2img ( fig ):
 
 #end from
 
-def graph_names(names: list, values: list) -> str:
+def graph_names(names: list, values: list, title="") -> Image:
     """Given a set of names and values,
     makes a simple  horizontal bargraph with
     line ticks and returns the path the resulting
     image.
     Argument names: The names of the labels
-    Argument values: The lengths of the bars"""
+    Argument values: The lengths of the bars
+    Argument title: The title for the graph."""
     fig = plt.figure(figsize=(26,3))
     fig.patch.set_facecolor('none')
 
@@ -51,6 +54,8 @@ def graph_names(names: list, values: list) -> str:
              values,
              tick_label=names,
              height=0.5)  # probably shouldn't be hardcoded
+
+    plt.title(title)
 
     return fig2img(plt.gcf())
 
