@@ -1,7 +1,11 @@
 # reddit-parser
 Parses every post from a given timeframe in a subreddit into video-friendly images
 
-**Usage**: 
+# Installation:
+In the root directory:
+> pip install requirements.txt
+
+# Usage: 
 Simply call parse.py in this format: 
 
 > parse.py subreddit start_time end_time 
