@@ -5,6 +5,9 @@ Parses every post from a given timeframe in a subreddit into video-friendly imag
 In the root directory:
 > pip install -r requirements.txt
 
+On Linux, you will also need to do 
+>sudo apt-get install python3-tk
+
 # Usage: 
 Simply call parse.py in this format: 
 
