@@ -126,27 +126,29 @@ def subreddit_worker(sub, stime, etime, timg):
     count = 0
     glist = []
     for i in range(0,len(times)):
+        print("Now processing: Block %d out of %d" % (i, len(times) - 1))
         try:
-            print("Now processing: Block %d out of %d" % (i, len(times) - 1))
             data = pushshift_get(sub, times[i], times[i + 1])
-            print("graphing karma....")
-            for post in data:
-                    if post['author'] is not "[deleted]":
-                        try:
-                            leaderboard[post['author']] += post['score']
-                        except KeyError:
-                            leaderboard[post['author']] = post['score']
+        except IndexError:
+            data = pushshift_get(sub, times[i], times[i + 1])
+        print("graphing karma....")
+        for post in data:
+            if post['author'] is not "[deleted]":
+                try:
+                    leaderboard[post['author']] += post['score']
+                except KeyError:
+                    leaderboard[post['author']] = post['score']
 
-                    leaderboard_top = sorted(leaderboard, key=leaderboard.get)[-3:]
-                    if leaderboard_top != leaderboard_old:
-                        glist.append(bgraph.graph_names(leaderboard_top, [leaderboard[x] for x in leaderboard_top],
-                                                       "Karma Leaderboard"))
-                        leaderboard_old = leaderboard_top
-                    else:
-                        glist.append(glist[-1])
+            leaderboard_top = sorted(leaderboard, key=leaderboard.get)[-3:]
+            if leaderboard_top != leaderboard_old:
+                glist.append(bgraph.graph_names(leaderboard_top, [leaderboard[x] for x in leaderboard_top],
+                                                    "Karma Leaderboard"))
+                leaderboard_old = leaderboard_top
+            else:
+                glist.append(glist[-1])
 
-                    log(u"Post %s at %s by /u/%s. Score: %s\n" % (
-                        post['permalink'], post['created_utc'], post['author'], post['score']), "logs\\record.txt")
+            log(u"Post %s at %s by /u/%s. Score: %s\n" % (
+                post['permalink'], post['created_utc'], post['author'], post['score']), "logs\\record.txt")
 
             with mp.Pool(processes=5) as pool:
                 with tqdm(total=len(data)) as pbar: # it's about to get ugly....
@@ -155,37 +157,6 @@ def subreddit_worker(sub, stime, etime, timg):
                         pbar.update()
 
             count += len(data)
-
-
-
-
-        except IndexError:
-                print("Now processing: Block %d out of %d" % (i, len(times) - 1))
-                data = pushshift_get(sub, times[i], times[i + 1])
-                glist = []
-                for post in data:
-                    if post['author'] is not "[deleted]":
-                        try:
-                            leaderboard[post['author']] += post['score']
-                        except KeyError:
-                            leaderboard[post['author']] = post['score']
-
-                    leaderboard_top = sorted(leaderboard, key=leaderboard.get)[-3:]
-                    if leaderboard_top != leaderboard_old:
-                        glist.append(bgraph.graph_names(leaderboard_top, [leaderboard[x] for x in leaderboard_top],
-                                                        "Karma Leaderboard"))
-                        leaderboard_old = leaderboard_top
-
-                    log("Post %s at %s by /u/%s. Score: %s\n" % (
-                        post['permalink'], post['created_utc'], post['author'], post['score']), "logs\\record.txt")
-
-                with mp.Pool(processes=5) as pool:
-                    with tqdm(total=len(data)) as pbar:  # it's about to get ugly....
-                        for i, _ in enumerate(pool.imap_unordered(partial(post_worker, ibase=timg),
-                                                                  zip(data, range(count, count + len(data)), glist))):
-                            pbar.update()
-
-                count += len(data)
 
 
 if __name__ == '__main__':
