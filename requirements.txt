@@ -1,0 +1,5 @@
+requests>=2.12.4
+tqdm>=4.28.1
+Pillow>=5.0
+matplotlib>=2.1.1
+numpy>=1.7.1
