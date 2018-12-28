@@ -83,7 +83,7 @@ def post_worker(args, ibase):
         target_x = pos[2] - pos[0]
         target_y = pos[3] - pos[1]
         if img.size[0] > target_x or img.size[1] > target_y:
-            img = img.resize((target_x, target_y))
+            img.thumbnail((target_x, target_y))
         blank = Image.new("RGB", (target_x, target_y)) # why does Pillow force us to create another Image for pasting???
         blank.paste(img,
                     (int(round((blank.size[0]-img.size[0])/2)),
