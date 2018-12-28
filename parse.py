@@ -6,6 +6,7 @@ import numpy
 import json
 import datetime
 import codecs
+import time
 import multiprocessing as mp
 from functools import partial
 from reddit_parse import mlplt_bargraph as bgraph
@@ -129,8 +130,17 @@ def subreddit_worker(sub, stime, etime, timg):
         print("Now processing: Block %d out of %d" % (i, len(times) - 1))
         try:
             data = pushshift_get(sub, times[i], times[i + 1])
+
         except IndexError:
+            data = pushshift_get(sub, times[-1], int(time.time()))
+
+        except (requests.ConnectionError, requests.ConnectTimeout):
+            print("Connection error, sleeping for 10 minutes")
+            log("Could not connect to pushshift at %s on post %s" % (datetime.datetime.now(), count))
+            time.sleep(600)
             data = pushshift_get(sub, times[i], times[i + 1])
+
+
         print("graphing karma....")
         for post in data:
             if post['author'] is not "[deleted]":
