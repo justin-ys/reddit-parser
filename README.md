@@ -3,7 +3,7 @@ Parses every post from a given timeframe in a subreddit into video-friendly imag
 
 # Installation:
 In the root directory:
-> pip install requirements.txt
+> pip install -r requirements.txt
 
 # Usage: 
 Simply call parse.py in this format: 
