@@ -10,6 +10,8 @@ import time
 import multiprocessing as mp
 from functools import partial
 from reddit_parse import mlplt_bargraph as bgraph
+
+
 ###############
 
 
@@ -26,9 +28,10 @@ def pushshift_get(sub, stime, etime):
                             "&before=%s"
                             "&after=%s"
                             "&subreddit=%s"
-                            "&size=100000" # otherwise just returns 25
+                            "&size=100000"  # otherwise just returns 25
                             % (etime, stime, sub))
     return json.loads(response.text)['data']
+
 
 def get_providers():
     with open("trusted_providers.txt", 'r')as f:
@@ -45,12 +48,13 @@ def img_from_link(url):
             return Image.open(data)
 
         except (OSError, AttributeError) as e:
-            log("Could not load image of post %s. Exception: %s" % (url, e),"logs\\log.txt")
+            log("Could not load image of post %s. Exception: %s" % (url, e), "logs\\log.txt")
 
         except requests.exceptions.ConnectionError as e:
-            log("Timeout when trying to parse image of post %s. Exception: %s" % (url, e),"logs\\log.txt")
+            log("Timeout when trying to parse image of post %s. Exception: %s" % (url, e), "logs\\log.txt")
 
     return None  # We've either hit an error or a non-compliant post, so skip this one
+
 
 #####################
 
@@ -72,10 +76,11 @@ def post_worker(args, ibase):
                     as the second argument
                     """
     post, name, graph = args[0], args[1], args[2]
+
     def get_text_centered(text, font, size, pos):
         fnt = ImageFont.truetype(font, size, encoding='unic')
         size = fnt.getsize(text)
-        return pos - size[0]/2
+        return pos - size[0] / 2
 
     base, pos = ibase[0], ibase[1]
     base_new = base.copy()
@@ -85,33 +90,36 @@ def post_worker(args, ibase):
         target_y = pos[3] - pos[1]
         if img.size[0] > target_x or img.size[1] > target_y:
             img.thumbnail((target_x, target_y))
-        blank = Image.new("RGB", (target_x, target_y)) # why does Pillow force us to create another Image for pasting???
+        blank = Image.new("RGB",
+                          (target_x, target_y))  # why does Pillow force us to create another Image for pasting???
         blank.paste(img,
-                    (int(round((blank.size[0]-img.size[0])/2)),
-                     int(round((blank.size[1]-img.size[1])/2))))
+                    (int(round((blank.size[0] - img.size[0]) / 2)),
+                     int(round((blank.size[1] - img.size[1]) / 2))))
         base_new.paste(blank, pos)
 
         # Drawing the text.....
         draw = ImageDraw.Draw(base_new)
-        titlepos = get_text_centered(post['title'], "reddit_parse\\resources\\symbola.ttf",108,2076)
+        titlepos = get_text_centered(post['title'], "reddit_parse\\resources\\symbola.ttf", 108, 2076)
         authpos = get_text_centered("by /u" + post['author'], "reddit_parse\\resources\\symbola.ttf", 48, 2060)
         scorepos = get_text_centered("karma:" + str(post['score']), "reddit_parse\\resources\\symbola.ttf", 36, 2060)
 
         tfont = ImageFont.truetype("reddit_parse\\resources\\symbola.ttf", 108, encoding='unic')
-        draw.text((titlepos, 520), post['title'], font=tfont, fill=(0,0,0,255))
+        draw.text((titlepos, 520), post['title'], font=tfont, fill=(0, 0, 0, 255))
 
         afont = ImageFont.truetype("reddit_parse\\resources\\symbola.ttf", 48, encoding='unic')
-        draw.text((authpos, 670), "by /u/" + post['author'], font=afont, fill=(0,0,0,255))
+        draw.text((authpos, 670), "by /u/" + post['author'], font=afont, fill=(0, 0, 0, 255))
 
         sfont = ImageFont.truetype("reddit_parse\\resources\\symbola.ttf", 36, encoding='unic')
         if post['score'] > 0:
-            draw.text((scorepos, 832), "karma: " + str(post['score']), font=sfont, fill=(255,139,96,255))
+            draw.text((scorepos, 832), "karma: " + str(post['score']), font=sfont, fill=(255, 139, 96, 255))
         else:
-            draw.text((scorepos, 832), "karma: " + str(post['score']), font=sfont, fill=(148,148,255,255))
+            draw.text((scorepos, 832), "karma: " + str(post['score']), font=sfont, fill=(148, 148, 255, 255))
 
-        draw.text((30,220), datetime.datetime.utcfromtimestamp(post['created_utc']).strftime("%B %d, %Y %H:%M:%S"),font=sfont, fill=(0,0,0,255))
-        base_new.paste(graph, (0,base.size[1] - graph.size[1]))
+        draw.text((30, 220), datetime.datetime.utcfromtimestamp(post['created_utc']).strftime("%B %d, %Y %H:%M:%S"),
+                  font=sfont, fill=(0, 0, 0, 255))
+        base_new.paste(graph, (0, base.size[1] - graph.size[1]))
         base_new.save("out\\parsed_%s.png" % str(name).zfill(6))
+
 
 def subreddit_worker(sub, stime, etime, timg):
     """Given a subreddit and a start time,
@@ -126,7 +134,7 @@ def subreddit_worker(sub, stime, etime, timg):
     graph = bgraph.graph_names([""] * 3, [0] * 3)
     count = 0
     glist = []
-    for i in range(0,len(times)):
+    for i in range(0, len(times)):
         print("Now processing: Block %d out of %d" % (i, len(times) - 1))
         try:
             data = pushshift_get(sub, times[i], times[i + 1])
@@ -140,7 +148,6 @@ def subreddit_worker(sub, stime, etime, timg):
             time.sleep(600)
             data = pushshift_get(sub, times[i], times[i + 1])
 
-
         print("graphing karma....")
         for post in data:
             if post['author'] is not "[deleted]":
@@ -152,7 +159,7 @@ def subreddit_worker(sub, stime, etime, timg):
             leaderboard_top = sorted(leaderboard, key=leaderboard.get)[-3:]
             if leaderboard_top != leaderboard_old:
                 glist.append(bgraph.graph_names(leaderboard_top, [leaderboard[x] for x in leaderboard_top],
-                                                    "Karma Leaderboard"))
+                                                "Karma Leaderboard"))
                 leaderboard_old = leaderboard_top
             else:
                 glist.append(glist[-1])
@@ -160,15 +167,17 @@ def subreddit_worker(sub, stime, etime, timg):
             log(u"Post %s at %s by /u/%s. Score: %s\n" % (
                 post['permalink'], post['created_utc'], post['author'], post['score']), "logs\\record.txt")
 
+            print("Done, now parsing posts")
+
             with mp.Pool(processes=5) as pool:
-                with tqdm(total=len(data)) as pbar: # it's about to get ugly....
+                with tqdm(total=len(data)) as pbar:  # it's about to get ugly....
                     for i, _ in enumerate(pool.imap_unordered(partial(post_worker, ibase=timg),
-                                                              zip(data,range(count,count+len(data)),glist))):
+                                                              zip(data, range(count, count + len(data)), glist))):
                         pbar.update()
 
             count += len(data)
 
 
 if __name__ == '__main__':
-    template = [Image.open("reddit_parse\\resources\\template.png"),(35,258,1595,1080)]
-    subreddit_worker('me_irl',1514764800,1545819010, template)
+    template = [Image.open("reddit_parse\\resources\\template.png"), (35, 258, 1595, 1080)]
+    subreddit_worker('me_irl', 1514764800, 1545819010, template)
