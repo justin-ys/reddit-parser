@@ -9,6 +9,7 @@ import codecs
 import time
 import multiprocessing as mp
 from functools import partial
+import sys
 from reddit_parse import mlplt_bargraph as bgraph
 
 
@@ -77,10 +78,10 @@ def post_worker(args, ibase):
                     """
     post, name, graph = args[0], args[1], args[2]
 
-    def get_text_centered(text, font, size, pos):
+    def get_text_centered(text, font, size, loc):
         fnt = ImageFont.truetype(font, size, encoding='unic')
         size = fnt.getsize(text)
-        return pos - size[0] / 2
+        return loc - size[0] / 2
 
     base, pos = ibase[0], ibase[1]
     base_new = base.copy()
@@ -179,5 +180,8 @@ def subreddit_worker(sub, stime, etime, timg):
 
 
 if __name__ == '__main__':
+    sub = sys.argv[1]
+    start_time = sys.argv[2]
+    end_time = sys.argv[3]
     template = [Image.open("reddit_parse\\resources\\template.png"), (35, 258, 1595, 1080)]
-    subreddit_worker('me_irl', 1514764800, 1545819010, template)
+    subreddit_worker(sub, start_time, end_time, template)
