@@ -4,8 +4,10 @@ from PIL import Image, ImageFont, ImageDraw
 import requests
 import numpy
 import json
-import time
 import datetime
+import codecs
+import multiprocessing as mp
+from functools import partial
 from reddit_parse import mlplt_bargraph as bgraph
 ###############
 
@@ -13,7 +15,7 @@ from reddit_parse import mlplt_bargraph as bgraph
 ### functions/libs ###
 
 def log(text: str, fname: str):
-    with open(fname, "a") as f:
+    with codecs.open(fname, "a", "utf-8-sig") as f:
         f.write("\n" + text)
 
 
@@ -54,17 +56,21 @@ def img_from_link(url):
 ### workers/main functions ###
 
 
-def post_worker(post, ibase: list, name, graph):
+def post_worker(args, ibase):
     """Given pushshift reddit post data,
     formats the post into
     the image template and saves it.
-    Argument post: The pushshift JSON post data.
+    Argument args: A tuple with the pushshift JSON post data
+                    as the first element, the number of the
+                    post as the second element and the karma
+                    leaderboard graph as the third element.
+                    (multiprocessing reasons)
     Argument ibase: An array with the PIL image base as the
                     first argument, and a 4-tuple containing
                     the box to paste the extracted image
                     as the second argument
-    Argument name: The name of the image to be saved.
-    Argument graph: An image containing a bargraph for karma scores."""
+                    """
+    post, name, graph = args[0], args[1], args[2]
     def get_text_centered(text, font, size, pos):
         fnt = ImageFont.truetype(font, size, encoding='unic')
         size = fnt.getsize(text)
@@ -102,10 +108,9 @@ def post_worker(post, ibase: list, name, graph):
         else:
             draw.text((scorepos, 832), "karma: " + str(post['score']), font=sfont, fill=(148,148,255,255))
 
-        draw.text((30,244), datetime.datetime.utcfromtimestamp(post['created_utc']).strftime("%B %d, %Y %H:%M:%S"),font=afont)
+        draw.text((30,220), datetime.datetime.utcfromtimestamp(post['created_utc']).strftime("%B %d, %Y %H:%M:%S"),font=sfont, fill=(0,0,0,255))
         base_new.paste(graph, (0,base.size[1] - graph.size[1]))
-        log("Post %s at %s by /u/%s. Score: %s\n" % (post['permalink'], post['created_utc'], post['author'], post['score']), "logs\\record.txt")
-        base_new.save("out\\%s" % name)
+        base_new.save("out\\parsed_%s.png" % str(name).zfill(6))
 
 def subreddit_worker(sub, stime, etime, timg):
     """Given a subreddit and a start time,
@@ -119,11 +124,13 @@ def subreddit_worker(sub, stime, etime, timg):
     leaderboard_old = 0
     graph = bgraph.graph_names([""] * 3, [0] * 3)
     count = 0
+    glist = []
     for i in range(0,len(times)):
         try:
             print("Now processing: Block %d out of %d" % (i, len(times) - 1))
             data = pushshift_get(sub, times[i], times[i + 1])
-            for post in tqdm(data):
+            print("graphing karma....")
+            for post in data:
                     if post['author'] is not "[deleted]":
                         try:
                             leaderboard[post['author']] += post['score']
@@ -132,32 +139,53 @@ def subreddit_worker(sub, stime, etime, timg):
 
                     leaderboard_top = sorted(leaderboard, key=leaderboard.get)[-3:]
                     if leaderboard_top != leaderboard_old:
-                        graph = bgraph.graph_names(leaderboard_top, [leaderboard[x] for x in leaderboard_top],
-                                                       "Karma Leaderboard")
+                        glist.append(bgraph.graph_names(leaderboard_top, [leaderboard[x] for x in leaderboard_top],
+                                                       "Karma Leaderboard"))
                         leaderboard_old = leaderboard_top
-                    post_worker(post, timg, "parsed_%s.png" % str(count).zfill(6), graph)
-                    count += 1
+                    else:
+                        glist.append(glist[-1])
+
+                    log(u"Post %s at %s by /u/%s. Score: %s\n" % (
+                        post['permalink'], post['created_utc'], post['author'], post['score']), "logs\\record.txt")
+
+            with mp.Pool(processes=5) as pool:
+                with tqdm(total=len(data)) as pbar: # it's about to get ugly....
+                    for i, _ in enumerate(pool.imap_unordered(partial(post_worker, ibase=timg),
+                                                              zip(data,range(count,count+len(data)),glist))):
+                        pbar.update()
+
+            count += len(data)
+
+
+
 
         except IndexError:
-            data = pushshift_get('me_irl', times[-1], int(time.time()))
-            for post in data:
-                if post['author'] is not "[deleted]":
-                    try:
-                        leaderboard[post['author']] += post['score']
-                    except KeyError:
-                        leaderboard[post['author']] = post['score']
+                print("Now processing: Block %d out of %d" % (i, len(times) - 1))
+                data = pushshift_get(sub, times[i], times[i + 1])
+                glist = []
+                for post in data:
+                    if post['author'] is not "[deleted]":
+                        try:
+                            leaderboard[post['author']] += post['score']
+                        except KeyError:
+                            leaderboard[post['author']] = post['score']
 
-                leaderboard_top = sorted(leaderboard, key=leaderboard.get)[-3:]
-                if leaderboard_top != leaderboard_old:
-                    graph = bgraph.graph_names(leaderboard_top, [leaderboard[x] for x in leaderboard_top],
-                                               "Karma Leaderboard")
-                    leaderboard_old = leaderboard_top
-                post_worker(post, timg, "parsed_%s.png" % str(count).zfill(6), graph)
-                count += 1
+                    leaderboard_top = sorted(leaderboard, key=leaderboard.get)[-3:]
+                    if leaderboard_top != leaderboard_old:
+                        glist.append(bgraph.graph_names(leaderboard_top, [leaderboard[x] for x in leaderboard_top],
+                                                        "Karma Leaderboard"))
+                        leaderboard_old = leaderboard_top
 
+                    log("Post %s at %s by /u/%s. Score: %s\n" % (
+                        post['permalink'], post['created_utc'], post['author'], post['score']), "logs\\record.txt")
 
+                with mp.Pool(processes=5) as pool:
+                    with tqdm(total=len(data)) as pbar:  # it's about to get ugly....
+                        for i, _ in enumerate(pool.imap_unordered(partial(post_worker, ibase=timg),
+                                                                  zip(data, range(count, count + len(data)), glist))):
+                            pbar.update()
 
-
+                count += len(data)
 
 
 if __name__ == '__main__':
