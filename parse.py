@@ -23,15 +23,18 @@ def log(text: str, fname: str):
         f.write("\n" + text)
 
 
-def pushshift_get(sub, stime, etime):
+def pushshift_get(subs, stime, etime):
     # slightly based on https://gist.github.com/dylankilkenny/3dbf6123527260165f8c5c3bc3ee331b, so thanks
-    response = requests.get("https://api.pushshift.io/reddit/search/submission?"
-                            "&before=%s"
-                            "&after=%s"
-                            "&subreddit=%s"
-                            "&size=100000"  # otherwise just returns 25
-                            % (etime, stime, sub))
-    return json.loads(response.text)['data']
+    posts = []
+    for sub in subs:
+        response = requests.get("https://api.pushshift.io/reddit/search/submission?"
+                                "&before=%s"
+                                "&after=%s"
+                                "&subreddit=%s"
+                                "&size=100000"  # otherwise just returns 25
+                                % (etime, stime, sub))
+        posts.extend(json.loads(response.text)['data'])
+    return sorted(posts, key = lambda post: post['created_utc'])
 
 
 def get_providers():
@@ -40,7 +43,8 @@ def get_providers():
         return tuple(data.split("\n"))
 
 
-def img_from_link(url):
+def img_from_post(post: dict):
+    url = post['url']
     if url.startswith(get_providers()):
         try:
             if url.startswith("https://imgur"):
@@ -49,10 +53,11 @@ def img_from_link(url):
             return Image.open(data)
 
         except (OSError, AttributeError) as e:
-            log("Could not load image of post %s. Exception: %s" % (url, e), "logs\\log.txt")
+            log("Could not load image of post %s. Exception: %s" % (url, e), "logs/log.txt")
 
         except requests.exceptions.ConnectionError as e:
-            log("Timeout when trying to parse image of post %s. Exception: %s" % (url, e), "logs\\log.txt")
+            log("Timeout when trying to parse image of post %s. Exception: %s" % (url, e), "logs/log.txt")
+
 
     return None  # We've either hit an error or a non-compliant post, so skip this one
 
@@ -85,7 +90,7 @@ def post_worker(args, ibase):
 
     base, pos = ibase[0], ibase[1]
     base_new = base.copy()
-    img = img_from_link(post['url'])
+    img = img_from_post(post)
     if img is not None:
         target_x = pos[2] - pos[0]
         target_y = pos[3] - pos[1]
@@ -100,17 +105,17 @@ def post_worker(args, ibase):
 
         # Drawing the text.....
         draw = ImageDraw.Draw(base_new)
-        titlepos = get_text_centered(post['title'], "reddit_parse\\resources\\symbola.ttf", 108, 2076)
-        authpos = get_text_centered("by /u" + post['author'], "reddit_parse\\resources\\symbola.ttf", 48, 2060)
-        scorepos = get_text_centered("karma:" + str(post['score']), "reddit_parse\\resources\\symbola.ttf", 36, 2060)
+        titlepos = get_text_centered(post['title'], "reddit_parse/resources/symbola.ttf", 108, 2076)
+        authpos = get_text_centered("by /u" + post['author'], "reddit_parse/resources/symbola.ttf", 48, 2060)
+        scorepos = get_text_centered("karma:" + str(post['score']), "reddit_parse/resources/symbola.ttf", 36, 2060)
 
-        tfont = ImageFont.truetype("reddit_parse\\resources\\symbola.ttf", 108, encoding='unic')
+        tfont = ImageFont.truetype("reddit_parse/resources/symbola.ttf", 108, encoding='unic')
         draw.text((titlepos, 520), post['title'], font=tfont, fill=(0, 0, 0, 255))
 
-        afont = ImageFont.truetype("reddit_parse\\resources\\symbola.ttf", 48, encoding='unic')
+        afont = ImageFont.truetype("reddit_parse/resources/symbola.ttf", 48, encoding='unic')
         draw.text((authpos, 670), "by /u/" + post['author'], font=afont, fill=(0, 0, 0, 255))
 
-        sfont = ImageFont.truetype("reddit_parse\\resources\\symbola.ttf", 36, encoding='unic')
+        sfont = ImageFont.truetype("reddit_parse/resources/symbola.ttf", 36, encoding='unic')
         if post['score'] > 0:
             draw.text((scorepos, 832), "karma: " + str(post['score']), font=sfont, fill=(255, 139, 96, 255))
         else:
@@ -119,7 +124,7 @@ def post_worker(args, ibase):
         draw.text((30, 220), datetime.datetime.utcfromtimestamp(post['created_utc']).strftime("%B %d, %Y %H:%M:%S"),
                   font=sfont, fill=(0, 0, 0, 255))
         base_new.paste(graph, (0, base.size[1] - graph.size[1]))
-        base_new.save("out\\parsed_%s.png" % str(name).zfill(6))
+        base_new.save("out/parsed_%s.png" % str(name).zfill(6))
 
 
 def subreddit_worker(sub, stime, etime, timg):
@@ -151,7 +156,7 @@ def subreddit_worker(sub, stime, etime, timg):
 
         print("graphing karma....")
         for post in data:
-            if post['author'] is not "[deleted]":
+            if post['author'] != "[deleted]":
                 try:
                     leaderboard[post['author']] += post['score']
                 except KeyError:
@@ -166,22 +171,23 @@ def subreddit_worker(sub, stime, etime, timg):
                 glist.append(glist[-1])
 
             log(u"Post %s at %s by /u/%s. Score: %s\n" % (
-                post['permalink'], post['created_utc'], post['author'], post['score']), "logs\\record.txt")
+                post['permalink'], post['created_utc'], post['author'], post['score']), "logs/record.txt")
 
-            print("Done, now parsing posts")
+        print("Done, now parsing posts")
 
-            with mp.Pool(processes=5) as pool:
-                with tqdm(total=len(data)) as pbar:  # it's about to get ugly....
-                    for i, _ in enumerate(pool.imap_unordered(partial(post_worker, ibase=timg),
-                                                              zip(data, range(count, count + len(data)), glist))):
-                        pbar.update()
+        #TODO: below uses multiprocessing for post rendering, runs fast but wow please redo it i'm sure it can look better than this
+        with mp.Pool(processes=5) as pool:
+            with tqdm(total=len(data)) as pbar:  # it's about to get ugly....
+                for i, _ in enumerate(pool.imap_unordered(partial(post_worker, ibase=timg),
+                                    zip(data, range(count, count + len(data)), glist))):
+                    pbar.update()
 
             count += len(data)
 
 
 if __name__ == '__main__':
-    sub = sys.argv[1]
-    start_time = sys.argv[2]
-    end_time = sys.argv[3]
-    template = [Image.open("reddit_parse\\resources\\template.png"), (35, 258, 1595, 1080)]
-    subreddit_worker(sub, start_time, end_time, template)
+    subs = sys.argv[1].split(",")
+    start_time = int(sys.argv[2])
+    end_time = int(sys.argv[3])
+    template = [Image.open("reddit_parse/resources/template.png"), (35, 258, 1595, 1080)]
+    subreddit_worker(subs, start_time, end_time, template)
